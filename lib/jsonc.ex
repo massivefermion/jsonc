@@ -1,8 +1,4 @@
 defmodule JSONC do
-  import JSONC.Parser
-
-  def main do
-    sample = File.read!("sample.jsonc")
-    parse(sample)
-  end
+  defdelegate decode!(content), to: JSONC.Decoder
+  defdelegate decode(content), to: JSONC.Decoder
 end
