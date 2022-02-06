@@ -101,11 +101,9 @@ defmodule JSONC.Parser do
                     {:error, reason}
 
                   {value, _} = node ->
-                    peeked = peek()
-
                     case context do
                       :root ->
-                        case peeked do
+                        case peek() do
                           :done ->
                             {:ok, %{type: :root, value: value, comments: comments}}
 
@@ -134,9 +132,7 @@ defmodule JSONC.Parser do
 
   defp parse_object(start, map \\ %{}, comments \\ [])
        when is_map(map) and is_list(comments) do
-    peeked = peek()
-
-    case peeked do
+    case peek() do
       {{:delimiter, {:brace, :close}}, _, _} ->
         case parse_comments() do
           new_comments when is_list(new_comments) ->
@@ -179,21 +175,21 @@ defmodule JSONC.Parser do
         end
 
       _ ->
-        hopefully_key = next()
+        current = next()
 
         case parse_comments() do
           new_comments when is_list(new_comments) ->
             comments = comments ++ new_comments
 
-            case hopefully_key do
+            case current do
               {{:key, key}, _, _} ->
-                hopefully_colon = next()
+                current = next()
 
                 case parse_comments() do
                   new_comments when is_list(new_comments) ->
                     comments = comments ++ new_comments
 
-                    case hopefully_colon do
+                    case current do
                       {{:delimiter, :colon}, _, _} ->
                         case parse_value() do
                           {:error, reason} ->
@@ -214,9 +210,7 @@ defmodule JSONC.Parser do
                 end
 
               {{:string, {subtype, key}}, _, _} when subtype in [:single, :free] ->
-                peeked = peek()
-
-                case peeked do
+                case peek() do
                   {{:delimiter, :colon}, _, _} ->
                     next()
 
@@ -255,9 +249,7 @@ defmodule JSONC.Parser do
 
   defp parse_array(start, list \\ [], comments \\ [])
        when is_list(list) and is_list(comments) do
-    peeked = peek()
-
-    case peeked do
+    case peek() do
       {{:delimiter, {:bracket, :close}}, _, _} ->
         case parse_comments() do
           new_comments when is_list(new_comments) ->
@@ -312,9 +304,7 @@ defmodule JSONC.Parser do
   end
 
   defp parse_comments(comments \\ []) when is_list(comments) do
-    peeked = peek()
-
-    case peeked do
+    case peek() do
       {{:comment, {subtype, value}}, line, column} ->
         next()
 
