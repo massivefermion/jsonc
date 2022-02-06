@@ -89,7 +89,7 @@ defmodule JSONC.Parser do
 
                 {_ = token, line, column} ->
                   {:error,
-                   "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#1"}
+                   "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
               end
 
             case parse_comments() do
@@ -111,7 +111,7 @@ defmodule JSONC.Parser do
 
                           {_ = token, line, column} ->
                             {:error,
-                             "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#2"}
+                             "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
                         end
 
                       _ ->
@@ -157,7 +157,7 @@ defmodule JSONC.Parser do
         end
 
       {{:delimiter, :comma} = token, line, column} when map == %{} ->
-        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#3"}
+        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
 
       {{:delimiter, :comma}, _, _} ->
         case parse_comments() do
@@ -206,7 +206,7 @@ defmodule JSONC.Parser do
 
                       {token, line, column} ->
                         {:error,
-                         "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#4"}
+                         "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
                     end
 
                   {:error, reason} ->
@@ -239,12 +239,12 @@ defmodule JSONC.Parser do
 
                   {token, line, column} ->
                     {:error,
-                     "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#5"}
+                     "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
                 end
 
               {token, line, column} ->
                 {:error,
-                 "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#6"}
+                 "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
             end
 
           {:error, reason} ->
@@ -278,7 +278,7 @@ defmodule JSONC.Parser do
         end
 
       {{:delimiter, :comma} = token, line, column} when list == [] ->
-        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}#7"}
+        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
 
       {{:delimiter, :comma}, _, _} ->
         case parse_comments() do
