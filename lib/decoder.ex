@@ -27,7 +27,7 @@ defmodule JSONC.Decoder do
   defp gather_value(value) when is_map(value) do
     case value do
       %{type: :object, value: object_node} ->
-        gather_object(object_node) |> Map.new()
+        gather_object(object_node)
 
       %{type: :array, value: array_node} ->
         gather_array(array_node)
@@ -41,7 +41,7 @@ defmodule JSONC.Decoder do
   end
 
   defp gather_object(node) when is_map(node) do
-    node |> Enum.map(fn {k, v} -> {k, gather_value(v)} end)
+    node |> Enum.map(fn {k, v} -> {k, gather_value(v)} end) |> Map.new()
   end
 
   defp gather_array(node) when is_list(node) do

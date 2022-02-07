@@ -90,6 +90,9 @@ defmodule JSONC.Parser do
                 {token, line, column} ->
                   {:error,
                    "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
+
+                :done ->
+                  {:error, "unexpected end of input"}
               end
 
             case parse_comments() do
