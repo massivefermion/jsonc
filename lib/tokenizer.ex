@@ -445,14 +445,7 @@ defmodule JSONC.Tokenizer do
                     {:string, {:free, generic}}
                 else
                   {base, exponent} ->
-                    try do
-                      :math.pow(base, exponent)
-                    rescue
-                      ArithmeticError ->
-                        {:string, {:free, generic}}
-                    else
-                      float -> {:number, {:float, float}}
-                    end
+                    {:number, {:float, handle_scientific(base, exponent)}}
                 end
 
               [generic] ->
@@ -463,6 +456,18 @@ defmodule JSONC.Tokenizer do
         end
     else
       float -> {:number, {:float, float}}
+    end
+  end
+
+  defp handle_scientific(base, exponent) do
+    cond do
+      base > 10 ->
+        base = base / 10
+        exponent = exponent + 1
+        handle_scientific(base, exponent)
+
+      true ->
+        String.to_float("#{base / 1}e#{exponent}")
     end
   end
 end
