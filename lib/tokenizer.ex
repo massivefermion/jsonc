@@ -445,7 +445,14 @@ defmodule JSONC.Tokenizer do
                     {:string, {:free, generic}}
                 else
                   {base, exponent} ->
-                    {:number, {:float, handle_scientific(base, exponent)}}
+                    try do
+                      handle_scientific(base, exponent)
+                    rescue
+                      ArgumentError ->
+                        {:string, {:free, generic}}
+                    else
+                      float -> {:number, {:float, float}}
+                    end
                 end
 
               [generic] ->
