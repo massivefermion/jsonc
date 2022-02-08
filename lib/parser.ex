@@ -1,4 +1,6 @@
 defmodule JSONC.Parser do
+  @moduledoc false
+
   import JSONC.Tokenizer
 
   def parse!(content) when is_binary(content) do

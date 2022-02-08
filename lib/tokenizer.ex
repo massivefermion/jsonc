@@ -1,4 +1,6 @@
 defmodule JSONC.Tokenizer do
+  @moduledoc false
+
   use Agent
 
   @whitespace ["\v", "\f", "\r", "\n", "\s", "\t", "\b"]
@@ -8,6 +10,13 @@ defmodule JSONC.Tokenizer do
     "}",
     "[",
     "]",
+    ",",
+    ":",
+    "\\",
+    "/",
+    "\"",
+    "`",
+    "*",
     "(",
     ")",
     "<",
@@ -20,17 +29,9 @@ defmodule JSONC.Tokenizer do
     "%",
     "^",
     "&",
-    "*",
-    "_",
     "=",
-    ",",
-    ":",
     ";",
-    "/",
-    "\\",
-    "|",
-    "\"",
-    "`"
+    "|"
   ]
 
   def start_tokenizer(content) when is_binary(content) do

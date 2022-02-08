@@ -1,11 +1,10 @@
 # JSONC
 
-**TODO: Add description**
+Utilities for working with [jsonc](https://komkom.github.io/jsonc-playground), a superset of json
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `jsonc` to your list of dependencies in `mix.exs`:
+The package can be installed by adding `jsonc` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -15,6 +14,4 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/jsonc](https://hexdocs.pm/jsonc).
+Documentation can be found at https://hexdocs.pm/jsonc
