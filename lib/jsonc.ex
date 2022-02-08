@@ -30,7 +30,8 @@ defmodule JSONC do
   ```
 
   I should say that right now, the performance for large documents is not acceptable, so use this package only when
-  human-readability is more important than performance, like using a jsonc file for specifying environmental variables for your app.
+  human-readability is more important than performance, like using a jsonc file for specifying environmental variables
+  for your app (for example with [enux]("https://hex.pm/packages/enux")).
   but I'll definitely keep working on optimising the parser or maybe writing a new parser if needed.
 
   ## Installation
