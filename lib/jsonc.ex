@@ -38,7 +38,7 @@ defmodule JSONC do
   ```
   defp deps do
     [
-      {:jsonc, "~> 0.1.0"}
+      {:jsonc, "~> 0.1.1"}
     ]
   end
   ```

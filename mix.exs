@@ -8,14 +8,14 @@ defmodule JSONC.MixProject do
     [
       app: :jsonc,
       name: "jsonc",
-      version: "0.1.0",
+      version: "0.1.1",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
       package: package(),
       description: description(),
-      source_url: @jsonc_url
+      source_url: @source_url
     ]
   end
 
@@ -27,7 +27,7 @@ defmodule JSONC.MixProject do
     [
       name: "jsonc",
       files: ["lib", "mix.exs", "README.md", "LICENSE"],
-      exclude_patterns: ["exclude.*"],
+      exclude_patterns: ["exclude"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url, "jsonc" => @jsonc_url}
     ]
@@ -47,7 +47,8 @@ defmodule JSONC.MixProject do
       api_reference: false,
       source_url: @source_url,
       source_ref: "main",
-      extras: ["LICENSE", "README.md"]
+      extras: ["LICENSE", "README.md"],
+      logo: "logo.png"
     ]
   end
 end

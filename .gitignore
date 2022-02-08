@@ -5,3 +5,4 @@ mix.lock
 .elixir_ls
 *.json
 *.jsonc
+exclude
