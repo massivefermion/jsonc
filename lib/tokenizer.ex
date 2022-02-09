@@ -333,6 +333,10 @@ defmodule JSONC.Tokenizer do
           {:string, :multi, "#{storage}#{<<current::utf8>>}"}
         )
 
+      ch when subtype == :single and ch in @whitespace ->
+        {{:error, "unescaped whitespace character at line #{line} column #{column}"},
+         {rest, cursor: {line, column}, token: nil}}
+
       _ ->
         case rest do
           "" ->
