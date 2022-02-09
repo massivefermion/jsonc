@@ -47,16 +47,17 @@ defmodule JSONC do
   ## Usage
 
   ```
-  iex(1)> JSONC.decode!(~s(// language information \\n { name: elixir github_stars: 19.8e3 forks: 2.8e3 creator: "José Valim"  }))
+  iex(1)> JSONC.decode!(~s(// language information \\n { name: elixir github_stars: 19.8e3 forks: 2.8e3 creator: "José Valim" 😔 : 😃 }))
   %{
     "creator" => "José Valim",
     "forks" => 2.8e3,
     "github_stars" => 1.98e4,
-    "name" => "elixir"
+    "name" => "elixir",
+    "😔" => "😃"
   }
 
-  iex(2)> JSONC.transcode!(~s(// language information \\n { name: elixir github_stars: 19.8e3 forks: 2.8e3 creator: "José Valim"  }))
-  "{\\n    \\"name\\": \"elixir\\",\\n    \\"github_stars\\": 1.98e4,\\n    \\"forks\\": 2.8e3,\\n    \\"creator\": \\"José Valim\\"\\n}"
+  iex(2)> JSONC.transcode!(~s(// language information \\n { name: elixir github_stars: 19.8e3 forks: 2.8e3 creator: "José Valim" 😔 : 😃 }))
+  "{\\n    \\"name\\": \"elixir\\",\\n    \\"github_stars\\": 1.98e4,\\n    \\"forks\\": 2.8e3,\\n    \\"creator\": \\"José Valim\\"\\n    \"😔\": \"😃\"\\n}"
   ```
   """
   @doc delegate_to: {JSONC.Decoder, :decode!, 1}
