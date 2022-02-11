@@ -1,6 +1,6 @@
 defmodule JSONC do
   @moduledoc """
-  This is a module for decoding [jsonc](https://komkom.github.io/jsonc-playground) documents and also transcoding them to json.
+  This is a package for decoding [jsonc](https://komkom.github.io/jsonc-playground) documents and also transcoding them to json.
   I'm also working on it to add a formatter.
 
   jsonc is a superset of json, which means any json document is also a jsonc document but the reverse is not true.
@@ -39,7 +39,7 @@ defmodule JSONC do
   ```
   defp deps do
     [
-      {:jsonc, "~> 0.2.0"}
+      {:jsonc, "~> 0.2.1"}
     ]
   end
   ```
