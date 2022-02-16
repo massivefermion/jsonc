@@ -1,6 +1,9 @@
 defmodule JSONC.Transcoder do
   import JSONC.Parser
 
+  @doc """
+  transcodes a jsonc document into a json document and raises in case of error
+  """
   def transcode!(content) when is_binary(content) do
     case transcode(content) do
       {:ok, result} -> result
@@ -8,6 +11,9 @@ defmodule JSONC.Transcoder do
     end
   end
 
+  @doc """
+  transcodes a jsonc document into a json document
+  """
   def transcode(content) when is_binary(content) do
     case parse(content) do
       {:ok, %{type: :root, value: value}} ->

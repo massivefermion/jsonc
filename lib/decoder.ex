@@ -1,6 +1,9 @@
 defmodule JSONC.Decoder do
   import JSONC.Parser
 
+  @doc """
+  decodes a jsonc document into a map and raises in case of error
+  """
   def decode!(content) when is_binary(content) do
     case decode(content) do
       {:ok, result} -> result
@@ -8,6 +11,9 @@ defmodule JSONC.Decoder do
     end
   end
 
+  @doc """
+  decodes a jsonc document into a map
+  """
   def decode(content) when is_binary(content) do
     case parse(content) do
       {:ok, %{type: :root, value: value}} ->
