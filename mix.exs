@@ -8,7 +8,7 @@ defmodule JSONC.MixProject do
     [
       app: :jsonc,
       name: "jsonc",
-      version: "0.2.2",
+      version: "0.3",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
