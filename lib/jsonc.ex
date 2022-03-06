@@ -39,7 +39,7 @@ defmodule JSONC do
   ```
   defp deps do
     [
-      {:jsonc, "~> 0.3.0"}
+      {:jsonc, "~> 0.4.0"}
     ]
   end
   ```
@@ -60,6 +60,7 @@ defmodule JSONC do
   "{\\n    \\"name\\": \"elixir\\",\\n    \\"github_stars\\": 1.98e4,\\n    \\"forks\\": 2.8e3,\\n    \\"creator\": \\"José Valim\\"\\n    \"😔\": \"😃\"\\n}"
   ```
   """
+
   @doc delegate_to: {JSONC.Decoder, :decode!, 1}
   defdelegate decode!(content), to: JSONC.Decoder
   @doc delegate_to: {JSONC.Decoder, :decode, 1}
@@ -69,4 +70,9 @@ defmodule JSONC do
   defdelegate transcode!(content), to: JSONC.Transcoder
   @doc delegate_to: {JSONC.Transcoder, :transcode, 1}
   defdelegate transcode(content), to: JSONC.Transcoder
+
+  @doc delegate_to: {JSONC.Formatter, :format!, 1}
+  defdelegate format!(content), to: JSONC.Formatter
+  @doc delegate_to: {JSONC.Formatter, :format, 1}
+  defdelegate format(content), to: JSONC.Formatter
 end

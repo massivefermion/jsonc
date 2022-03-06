@@ -68,37 +68,38 @@ defmodule JSONC.Tokenizer do
     {{handle_generic(generic), line, column}, {"", cursor: cursor, token: nil}}
   end
 
+  def next({"", cursor: {line, column}, token: _token}, {:string, _subtype, _storage}) do
+    {{:error, "unexpected end of input"}, {"", cursor: {line, column}, token: nil}}
+  end
+
   def next(
         {<<current::utf8, rest::binary>>, cursor: {line, column}, token: token},
         {:start, _} = state
       ) do
     case <<current::utf8>> do
+      "/" when rest == "" ->
+        {{:error, "unexpected end of input"}, {rest, cursor: {line, column}, token: nil}}
+
       "/" ->
-        case rest do
-          "" ->
-            {{:error, "unexpected end of input"}, {rest, cursor: {line, column}, token: nil}}
+        <<peeked::utf8, peeked_rest::binary>> = rest
+
+        case <<peeked::utf8>> do
+          "/" ->
+            next(
+              {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
+              {:comment, :single, ""}
+            )
+
+          "*" ->
+            next(
+              {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
+              {:comment, :multi, ""}
+            )
 
           _ ->
-            <<peeked::utf8, peeked_rest::binary>> = rest
-
-            case <<peeked::utf8>> do
-              "/" ->
-                next(
-                  {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
-                  {:comment, :single, ""}
-                )
-
-              "*" ->
-                next(
-                  {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
-                  {:comment, :multi, ""}
-                )
-
-              _ ->
-                {{:error,
-                  "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
-                 {rest, cursor: {line, column}, token: nil}}
-            end
+            {{:error,
+              "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
+             {rest, cursor: {line, column}, token: nil}}
         end
 
       "{" ->
@@ -135,20 +136,15 @@ defmodule JSONC.Tokenizer do
       ch when ch in @whitespace ->
         next({rest, cursor: {line, column + 1}, token: token}, state)
 
-      _ ->
-        cond do
-          @invalid_characters_for_generics
-          |> Enum.any?(fn ch -> <<current::utf8>> == ch end) ->
-            {{:error,
-              "unexpected character `#{<<current::utf8>>}` at line #{line} column #{column}"},
-             {rest, cursor: {line, column + 1}, token: nil}}
+      ch when ch in @invalid_characters_for_generics ->
+        {{:error, "unexpected character `#{<<current::utf8>>}` at line #{line} column #{column}"},
+         {rest, cursor: {line, column + 1}, token: nil}}
 
-          true ->
-            next(
-              {"#{<<current::utf8>>}#{rest}", cursor: {line, column}, token: {line, column}},
-              {:generic, ""}
-            )
-        end
+      _ ->
+        next(
+          {"#{<<current::utf8>>}#{rest}", cursor: {line, column}, token: {line, column}},
+          {:generic, ""}
+        )
     end
   end
 
@@ -169,7 +165,7 @@ defmodule JSONC.Tokenizer do
             {{handle_generic("#{storage}"), token |> elem(0), token |> elem(1)},
              {rest, cursor: {line + 1, 1}, token: nil}}
 
-          @whitespace |> Enum.any?(fn ch -> <<current::utf8>> == ch end) ->
+          <<current::utf8>> in @whitespace ->
             {{handle_generic("#{storage}"), token |> elem(0), token |> elem(1)},
              {rest, cursor: {line, column + 1}, token: nil}}
 
@@ -177,7 +173,7 @@ defmodule JSONC.Tokenizer do
             {{{:key, "#{storage}#{<<current::utf8>>}"}, token |> elem(0), token |> elem(1)},
              {rest, cursor: {line, column + 1}, token: nil}}
 
-          [",", "}", "]"] |> Enum.any?(fn ch -> <<peeked::utf8>> == ch end) ->
+          <<peeked::utf8>> in [",", "}", "]"] ->
             {
               {
                 handle_generic("#{storage}#{<<current::utf8>>}"),
@@ -187,20 +183,16 @@ defmodule JSONC.Tokenizer do
               {rest, cursor: {line, column + 1}, token: nil}
             }
 
-          true ->
-            cond do
-              @invalid_characters_for_generics
-              |> Enum.any?(fn ch -> <<current::utf8>> == ch end) ->
-                {{:error,
-                  "unexpected character `#{<<current::utf8>>}` at line #{line} column #{column}"},
-                 {rest, cursor: {line, column + 1}, token: nil}}
+          <<current::utf8>> in @invalid_characters_for_generics ->
+            {{:error,
+              "unexpected character `#{<<current::utf8>>}` at line #{line} column #{column}"},
+             {rest, cursor: {line, column + 1}, token: nil}}
 
-              true ->
-                next(
-                  {rest, cursor: {line, column + 1}, token: token},
-                  {:generic, "#{storage}#{<<current::utf8>>}"}
-                )
-            end
+          true ->
+            next(
+              {rest, cursor: {line, column + 1}, token: token},
+              {:generic, "#{storage}#{<<current::utf8>>}"}
+            )
         end
     end
   end
@@ -209,44 +201,34 @@ defmodule JSONC.Tokenizer do
         {<<current::utf8, rest::binary>>, cursor: {line, column}, token: token},
         {:string, subtype, storage}
       ) do
-    case <<current::utf8>> do
-      "\"" when subtype == :single ->
-        case rest do
-          "" ->
+    case rest do
+      "" ->
+        {{:error, "unexpected end of input"}, {rest, cursor: {line, column}, token: nil}}
+
+      _ ->
+        <<peeked::utf8, _peeked_rest::binary>> = rest
+
+        case <<current::utf8>> do
+          "\"" when subtype == :single and <<peeked::utf8>> == ":" ->
+            cond do
+              String.contains?(storage, "\\") ->
+                {{:error, "invalid key #{storage} at line #{line} column #{column}"},
+                 {rest, cursor: {line, column}, token: nil}}
+
+              true ->
+                {{{:key, storage}, token |> elem(0), token |> elem(1)},
+                 {rest, cursor: {line, column + 1}, token: nil}}
+            end
+
+          "\"" when subtype == :single ->
             {{{:string, {:single, storage}}, token |> elem(0), token |> elem(1)},
              {rest, cursor: {line, column + 1}, token: nil}}
 
-          _ ->
-            <<peeked::utf8, _peeked_rest::binary>> = rest
+          "`" when subtype == :multi ->
+            {{{:string, {:multi, storage}}, token |> elem(0), token |> elem(1)},
+             {rest, cursor: {line, column + 1}, token: nil}}
 
-            cond do
-              <<peeked::utf8>> == ":" ->
-                cond do
-                  String.contains?(storage, "\\") ->
-                    {{:error, "invalid key #{storage} at line #{line} column #{column}"},
-                     {rest, cursor: {line, column}, token: nil}}
-
-                  true ->
-                    {{{:key, storage}, token |> elem(0), token |> elem(1)},
-                     {rest, cursor: {line, column + 1}, token: nil}}
-                end
-
-              true ->
-                {{{:string, {:single, storage}}, token |> elem(0), token |> elem(1)},
-                 {rest, cursor: {line, column + 1}, token: nil}}
-            end
-        end
-
-      "`" when subtype == :multi ->
-        {{{:string, {:multi, storage}}, token |> elem(0), token |> elem(1)},
-         {rest, cursor: {line, column + 1}, token: nil}}
-
-      "\\" ->
-        case rest do
-          "" ->
-            {{:error, "unexpected end of input"}, {rest, cursor: {line, column}, token: nil}}
-
-          _ ->
+          "\\" ->
             <<peeked::utf8, peeked_rest::binary>> = rest
 
             case <<peeked::utf8>> do
@@ -309,32 +291,27 @@ defmodule JSONC.Tokenizer do
                   "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
                  {rest, cursor: {line, column}, token: nil}}
             end
-        end
 
-      "\n" when subtype == :single ->
-        {{:error, "unexpected end of line at line #{line} column #{column}"},
-         {rest, cursor: {line + 1, 1}, token: nil}}
+          "\n" when subtype == :single ->
+            {{:error, "unexpected end of line at line #{line} column #{column}"},
+             {rest, cursor: {line + 1, 1}, token: nil}}
 
-      "\n" when subtype == :multi ->
-        next(
-          {rest, cursor: {line + 1, 1}, token: token},
-          {:string, :multi, "#{storage}#{<<current::utf8>>}"}
-        )
+          "\n" when subtype == :multi ->
+            next(
+              {rest, cursor: {line + 1, 1}, token: token},
+              {:string, :multi, "#{storage}#{<<current::utf8>>}"}
+            )
 
-      "\s" ->
-        next(
-          {rest, cursor: {line, column + 1}, token: token},
-          {:string, subtype, "#{storage}#{<<current::utf8>>}"}
-        )
+          "\s" ->
+            next(
+              {rest, cursor: {line, column + 1}, token: token},
+              {:string, subtype, "#{storage}#{<<current::utf8>>}"}
+            )
 
-      ch when subtype == :single and ch in @whitespace ->
-        {{:error, "unescaped whitespace character #{current} at line #{line} column #{column}"},
-         {rest, cursor: {line, column}, token: nil}}
-
-      _ ->
-        case rest do
-          "" ->
-            {{:error, "unexpected end of input"}, {rest, cursor: {line, column}, token: nil}}
+          ch when subtype == :single and ch in @whitespace ->
+            {{:error,
+              "unescaped whitespace character #{current} at line #{line} column #{column}"},
+             {rest, cursor: {line, column}, token: nil}}
 
           _ ->
             next(
@@ -398,18 +375,15 @@ defmodule JSONC.Tokenizer do
               {:comment, :multi, "#{storage}#{<<current::utf8>>}"}
             )
 
-          _ ->
-            case <<current::utf8, peeked::utf8>> do
-              "*/" ->
-                {{{:comment, {:multi, storage}}, token |> elem(0), token |> elem(1)},
-                 {peeked_rest, cursor: {line, column + 2}, token: nil}}
+          _ when <<current::utf8, peeked::utf8>> == "*/" ->
+            {{{:comment, {:multi, storage}}, token |> elem(0), token |> elem(1)},
+             {peeked_rest, cursor: {line, column + 2}, token: nil}}
 
-              _ ->
-                next(
-                  {rest, cursor: {line, column + 1}, token: token},
-                  {:comment, subtype, "#{storage}#{<<current::utf8>>}"}
-                )
-            end
+          _ ->
+            next(
+              {rest, cursor: {line, column + 1}, token: token},
+              {:comment, subtype, "#{storage}#{<<current::utf8>>}"}
+            )
         end
     end
   end
