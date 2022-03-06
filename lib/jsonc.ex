@@ -70,9 +70,4 @@ defmodule JSONC do
   defdelegate transcode!(content), to: JSONC.Transcoder
   @doc delegate_to: {JSONC.Transcoder, :transcode, 1}
   defdelegate transcode(content), to: JSONC.Transcoder
-
-  @doc delegate_to: {JSONC.Formatter, :format!, 1}
-  defdelegate format!(content), to: JSONC.Formatter
-  @doc delegate_to: {JSONC.Formatter, :format, 1}
-  defdelegate format(content), to: JSONC.Formatter
 end
