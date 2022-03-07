@@ -39,7 +39,7 @@ defmodule JSONC.Tokenizer do
   def start_tokenizer(content) when is_binary(content) do
     case String.valid?(content) do
       true ->
-        Agent.start_link(fn -> {content, cursor: {1, 0}, token: nil} end, name: {:global, self()})
+        Agent.start_link(fn -> {content, cursor: {1, 1}, token: nil} end, name: {:global, self()})
 
       false ->
         {:error, "invalid input"}
