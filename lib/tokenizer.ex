@@ -16,6 +16,8 @@ defmodule JSONC.Tokenizer do
     "/",
     "\"",
     "`",
+    "'",
+    "~",
     "*",
     "(",
     ")",
@@ -183,9 +185,9 @@ defmodule JSONC.Tokenizer do
               {rest, cursor: {line, column + 1}, token: nil}
             }
 
-          <<current::utf8>> in @invalid_characters_for_generics ->
+          <<peeked::utf8>> in @invalid_characters_for_generics ->
             {{:error,
-              "unexpected character `#{<<current::utf8>>}` at line #{line} column #{column}"},
+              "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
              {rest, cursor: {line, column + 1}, token: nil}}
 
           true ->
