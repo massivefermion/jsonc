@@ -171,11 +171,7 @@ defmodule JSONC.Tokenizer do
             {{handle_generic("#{storage}"), token |> elem(0), token |> elem(1)},
              {rest, cursor: {line, column + 1}, token: nil}}
 
-          <<peeked::utf8>> == ":" ->
-            {{{:key, "#{storage}#{<<current::utf8>>}"}, token |> elem(0), token |> elem(1)},
-             {rest, cursor: {line, column + 1}, token: nil}}
-
-          <<peeked::utf8>> in [",", "}", "]"] ->
+          <<peeked::utf8>> in [",", "}", "]", ":"] ->
             {
               {
                 handle_generic("#{storage}#{<<current::utf8>>}"),
@@ -211,17 +207,6 @@ defmodule JSONC.Tokenizer do
         <<peeked::utf8, _peeked_rest::binary>> = rest
 
         case <<current::utf8>> do
-          "\"" when subtype == :single and <<peeked::utf8>> == ":" ->
-            cond do
-              String.contains?(storage, "\\") ->
-                {{:error, "invalid key #{storage} at line #{line} column #{column}"},
-                 {rest, cursor: {line, column}, token: nil}}
-
-              true ->
-                {{{:key, storage}, token |> elem(0), token |> elem(1)},
-                 {rest, cursor: {line, column + 1}, token: nil}}
-            end
-
           "\"" when subtype == :single ->
             {{{:string, {:single, storage}}, token |> elem(0), token |> elem(1)},
              {rest, cursor: {line, column + 1}, token: nil}}

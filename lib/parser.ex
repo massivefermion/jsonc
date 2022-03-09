@@ -187,33 +187,6 @@ defmodule JSONC.Parser do
             comments = comments ++ new_comments
 
             case current do
-              {{:key, key}, _, _} ->
-                current = next()
-
-                case parse_comments() do
-                  new_comments when is_list(new_comments) ->
-                    comments = comments ++ new_comments
-
-                    case current do
-                      {{:delimiter, :colon}, _, _} ->
-                        case parse_value() do
-                          {:error, reason} ->
-                            {:error, reason}
-
-                          {current, value_comments} ->
-                            map = map |> Map.put(key, current)
-                            parse_object(start, map, comments ++ value_comments)
-                        end
-
-                      {token, line, column} ->
-                        {:error,
-                         "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-                    end
-
-                  {:error, reason} ->
-                    {:error, reason}
-                end
-
               {{:string, {subtype, key}}, _, _} when subtype in [:single, :free] ->
                 case peek() do
                   {{:delimiter, :colon}, _, _} ->
