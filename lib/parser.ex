@@ -14,144 +14,121 @@ defmodule JSONC.Parser do
   end
 
   def parse(content) when is_binary(content) do
-    case start_tokenizer(content) do
+    case parse_value({content, cursor: {1, 1}, token: nil}, :root) do
+      {:ok, result} ->
+        {:ok, result}
+
       {:error, reason} ->
         {:error, reason}
-
-      _ ->
-        case parse_value(:root) do
-          {:ok, result} ->
-            stop_tokenizer()
-            {:ok, result}
-
-          {:error, reason} ->
-            stop_tokenizer()
-            {:error, reason}
-        end
     end
   end
 
-  defp parse_value(context \\ :other) do
-    case parse_comments() do
-      comments when is_list(comments) ->
-        current = next()
+  defp parse_value(state, context \\ :other) do
+    case parse_comments(state) do
+      {:error, reason} ->
+        {:error, reason}
 
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
+      {comments, state} when is_list(comments) ->
+        {current, state} = next(state)
+
+        case parse_comments(state) do
+          {:error, reason} ->
+            {:error, reason}
+
+          {new_comments, state} when is_list(new_comments) ->
             comments = comments ++ new_comments
 
-            value =
-              case current do
-                {{:delimiter, {:brace, :open}}, line, column} ->
-                  node = parse_object({line, column})
+            {value, state} =
+              case {current, state} do
+                {{{:delimiter, {:brace, :open}}, line, column}, state} ->
+                  {node, state} = parse_object(state, {line, column})
 
-                  case node do
+                  case {node, state} do
                     {:error, reason} ->
                       {:error, reason}
 
                     _ ->
-                      {node, []}
+                      {{node, comments}, state}
                   end
 
-                {{:delimiter, {:bracket, :open}}, line, column} ->
-                  node = parse_array({line, column})
+                {{{:delimiter, {:bracket, :open}}, line, column}, state} ->
+                  {node, state} = parse_array(state, {line, column})
 
-                  case node do
+                  case {node, state} do
                     {:error, reason} ->
                       {:error, reason}
 
                     _ ->
-                      {node, []}
+                      {{node, comments}, state}
                   end
 
-                {{:string, {subtype, value}}, line, column} ->
-                  {%{
-                     type: :string,
-                     subtype: subtype,
-                     value: value,
-                     place: {line, column}
-                   }, comments}
+                {{{:string, {subtype, value}}, line, column}, state} ->
+                  {{%{
+                      type: :string,
+                      subtype: subtype,
+                      value: value,
+                      place: {line, column}
+                    }, comments}, state}
 
-                {{:number, {subtype, value}}, line, column} ->
-                  {%{
-                     type: :number,
-                     subtype: subtype,
-                     value: value,
-                     place: {line, column}
-                   }, comments}
+                {{{:number, {subtype, value}}, line, column}, state} ->
+                  {{%{
+                      type: :number,
+                      subtype: subtype,
+                      value: value,
+                      place: {line, column}
+                    }, comments}, state}
 
-                {{:boolean, value}, line, column} ->
-                  {%{type: :boolean, value: value, place: {line, column}}, comments}
+                {{{:boolean, value}, line, column}, state} ->
+                  {{%{type: :boolean, value: value, place: {line, column}}, comments}, state}
 
-                {nil, line, column} ->
-                  {%{type: nil, place: {line, column}}, comments}
+                {{nil, line, column}, state} ->
+                  {{%{type: nil, place: {line, column}}, comments}, state}
 
                 {:error, reason} ->
                   {:error, reason}
 
-                {token, line, column} ->
+                {{token, line, column}, _} ->
                   {:error,
                    "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
 
-                :done ->
+                {:done, _} ->
                   {:error, "unexpected end of input"}
               end
 
-            case parse_comments() do
-              new_comments when is_list(new_comments) ->
-                comments = comments ++ new_comments
+            case value do
+              :error ->
+                {:error, state}
 
-                case value do
-                  {:error, reason} ->
-                    {:error, reason}
+              {value, _} = node ->
+                case context do
+                  :root ->
+                    case peek(state) do
+                      :done ->
+                        {:ok, %{type: :root, value: value, comments: comments}}
 
-                  {value, _} = node ->
-                    case context do
-                      :root ->
-                        case peek() do
-                          :done ->
-                            {:ok, %{type: :root, value: value, comments: comments}}
-
-                          {token, line, column} ->
-                            {:error,
-                             "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-                        end
-
-                      _ ->
-                        node
+                      {token, line, column} ->
+                        {:error,
+                         "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
                     end
+
+                  _ ->
+                    {node, state}
                 end
-
-              {:error, reason} ->
-                {:error, reason}
             end
-
-          {:error, reason} ->
-            {:error, reason}
         end
-
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 
-  defp parse_object(start, map \\ %{}, comments \\ [])
+  defp parse_object(state, start, map \\ %{}, comments \\ [])
        when is_map(map) and is_list(comments) do
-    case peek() do
+    case peek(state) do
       {{:delimiter, {:brace, :close}}, _, _} ->
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
+        {_, state} = next(state)
+
+        case parse_comments(state) do
+          {new_comments, state} when is_list(new_comments) ->
             comments = comments ++ new_comments
-            next()
-
-            case parse_comments() do
-              new_comments when is_list(new_comments) ->
-                comments = comments ++ new_comments
-                %{type: :object, value: map, place: start, comments: comments}
-
-              {:error, reason} ->
-                {:error, reason}
-            end
+            {%{type: :object, value: map, place: start, comments: comments}, state}
 
           {:error, reason} ->
             {:error, reason}
@@ -161,48 +138,41 @@ defmodule JSONC.Parser do
         {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
 
       {{:delimiter, :comma}, _, _} ->
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
+        {_, state} = next(state)
+
+        case parse_comments(state) do
+          {new_comments, state} when is_list(new_comments) ->
             comments = comments ++ new_comments
-            next()
-
-            case parse_comments() do
-              new_comments when is_list(new_comments) ->
-                comments = comments ++ new_comments
-                parse_object(start, map, comments)
-
-              {:error, reason} ->
-                {:error, reason}
-            end
+            parse_object(state, start, map, comments)
 
           {:error, reason} ->
             {:error, reason}
         end
 
       _ ->
-        current = next()
+        {current, state} = next(state)
 
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
+        case parse_comments(state) do
+          {new_comments, state} when is_list(new_comments) ->
             comments = comments ++ new_comments
 
             case current do
               {{:string, {subtype, key}}, _, _} when subtype in [:single, :free] ->
-                case peek() do
+                case peek(state) do
                   {{:delimiter, :colon}, _, _} ->
-                    next()
+                    {_, state} = next(state)
 
-                    case parse_comments() do
-                      new_comments when is_list(new_comments) ->
+                    case parse_comments(state) do
+                      {new_comments, state} when is_list(new_comments) ->
                         comments = comments ++ new_comments
 
-                        case parse_value() do
+                        case parse_value(state) do
                           {:error, reason} ->
                             {:error, reason}
 
-                          {current, value_comments} ->
+                          {{current, value_comments}, state} ->
                             map = map |> Map.put(key, current)
-                            parse_object(start, map, comments ++ value_comments)
+                            parse_object(state, start, map, comments ++ value_comments)
                         end
 
                       {:error, reason} ->
@@ -225,68 +195,57 @@ defmodule JSONC.Parser do
     end
   end
 
-  defp parse_array(start, list \\ [], comments \\ [])
+  defp parse_array(state, start, list \\ [], comments \\ [])
        when is_list(list) and is_list(comments) do
-    case peek() do
+    case peek(state) do
       {{:delimiter, {:bracket, :close}}, _, _} ->
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
-            comments = comments ++ new_comments
-            next()
+        {_, state} = next(state)
 
-            case parse_comments() do
-              new_comments when is_list(new_comments) ->
-                comments = comments ++ new_comments
-                %{type: :array, value: list, place: start, comments: comments}
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-
+        case parse_comments(state) do
           {:error, reason} ->
             {:error, reason}
+
+          {new_comments, state} when is_list(new_comments) ->
+            {%{type: :array, value: list, place: start, comments: comments ++ new_comments},
+             state}
         end
+
+      # end
 
       {{:delimiter, :comma} = token, line, column} when list == [] ->
         {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
 
       {{:delimiter, :comma}, _, _} ->
-        case parse_comments() do
-          new_comments when is_list(new_comments) ->
-            comments = comments ++ new_comments
-            next()
+        {_, state} = next(state)
 
-            case parse_comments() do
-              new_comments when is_list(new_comments) ->
-                comments = comments ++ new_comments
-                parse_array(start, list, comments)
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-
+        case parse_comments(state) do
           {:error, reason} ->
             {:error, reason}
+
+          {new_comments, state} when is_list(new_comments) ->
+            comments = comments ++ new_comments
+            parse_array(state, start, list, comments)
         end
 
       _ ->
-        case parse_value() do
+        case parse_value(state) do
           {:error, reason} ->
             {:error, reason}
 
-          {current, value_comments} ->
+          {{current, value_comments}, state} ->
             list = list ++ [current]
-            parse_array(start, list, comments ++ value_comments)
+            parse_array(state, start, list, comments ++ value_comments)
         end
     end
   end
 
-  defp parse_comments(comments \\ []) when is_list(comments) do
-    case peek() do
+  defp parse_comments(state, comments \\ []) when is_list(comments) do
+    case peek(state) do
       {{:comment, {subtype, value}}, line, column} ->
-        next()
+        {_, state} = next(state)
 
         parse_comments(
+          state,
           comments ++ [%{type: :comment, subtype: subtype, value: value, place: {line, column}}]
         )
 
@@ -294,7 +253,7 @@ defmodule JSONC.Parser do
         {:error, reason}
 
       _ ->
-        comments
+        {comments, state}
     end
   end
 end

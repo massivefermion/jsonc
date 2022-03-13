@@ -1,4 +1,8 @@
-defmodule JSONC.Tokenizer do
+defmodule JSONC.AgentTokenizer do
+  @moduledoc false
+
+  use Agent
+
   @whitespace ["\v", "\f", "\r", "\n", "\s", "\t", "\b"]
 
   @invalid_for_generics [
@@ -32,8 +36,26 @@ defmodule JSONC.Tokenizer do
     "|"
   ]
 
-  def peek(state) do
-    case next(state) do
+  def start_tokenizer(content) when is_binary(content) do
+    case String.valid?(content) do
+      true ->
+        Agent.start_link(fn -> {content, cursor: {1, 1}, token: nil} end, name: {:global, self()})
+
+      false ->
+        {:error, "invalid input"}
+    end
+  end
+
+  def stop_tokenizer do
+    Agent.stop({:global, self()})
+  end
+
+  def next do
+    Agent.get_and_update({:global, self()}, __MODULE__, :next, [])
+  end
+
+  def peek do
+    case Agent.get({:global, self()}, __MODULE__, :next, []) do
       {token, _} -> token
     end
   end
@@ -317,13 +339,8 @@ defmodule JSONC.Tokenizer do
         {:comment, subtype, storage}
       ) do
     case rest do
-      "" when subtype == :single ->
-        {{{:comment, {:single, "#{storage}#{<<current::utf8>>}"}}, token |> elem(0),
-          token |> elem(1)}, {"", cursor: {line, column + 1}, token: nil}}
-
-      "" when subtype == :multi ->
-        {{{:comment, {:multi, "#{storage}#{<<current::utf8>>}"}}, token |> elem(0),
-          token |> elem(1)}, {"", cursor: {line, column + 1}, token: nil}}
+      "" ->
+        {{:error, "unexpected end of input"}, {rest, cursor: {line, column + 1}, token: nil}}
 
       _ ->
         <<peeked::utf8, peeked_rest::binary>> = rest
