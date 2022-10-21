@@ -14,13 +14,7 @@ defmodule JSONC.Parser do
   end
 
   def parse(content) when is_binary(content) do
-    case parse_value({content, cursor: {1, 1}, token: nil}, :root) do
-      {:ok, result} ->
-        {:ok, result}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    parse_value({content, cursor: {1, 1}, token: nil}, :root)
   end
 
   defp parse_value(state, context \\ :other) do
@@ -209,8 +203,6 @@ defmodule JSONC.Parser do
             {%{type: :array, value: list, place: start, comments: comments ++ new_comments},
              state}
         end
-
-      # end
 
       {{:delimiter, :comma} = token, line, column} when list == [] ->
         {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}

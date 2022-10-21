@@ -292,22 +292,20 @@ defmodule JSONC.Tokenizer do
       _ ->
         <<first::utf8, second::utf8, third::utf8, fourth::utf8, rest::binary>> = rest
 
-        try do
-          String.to_integer(
-            "#{<<first::utf8>>}#{<<second::utf8>>}#{<<third::utf8>>}#{<<fourth::utf8>>}",
-            16
-          )
-        rescue
-          ArgumentError ->
-            {{:error,
-              "invalid hex sequence #{<<first::utf8>>}#{<<second::utf8>>}#{<<third::utf8>>}#{<<fourth::utf8>>}"},
-             {rest, cursor: {line, column + 6}, token: nil}}
-        else
-          code ->
+        case Integer.parse(
+               "#{<<first::utf8>>}#{<<second::utf8>>}#{<<third::utf8>>}#{<<fourth::utf8>>}",
+               16
+             ) do
+          {code, ""} ->
             next(
               {rest, cursor: {line, column + 6}, token: token},
               {:string, string_type, "#{storage}#{<<code::utf8>>}"}
             )
+
+          _ ->
+            {{:error,
+              "invalid hex sequence #{<<first::utf8>>}#{<<second::utf8>>}#{<<third::utf8>>}#{<<fourth::utf8>>}"},
+             {rest, cursor: {line, column + 6}, token: nil}}
         end
     end
   end
@@ -365,41 +363,20 @@ defmodule JSONC.Tokenizer do
   end
 
   defp handle_generic(generic) when is_binary(generic) do
-    try do
-      String.to_float(generic)
-    rescue
-      ArgumentError ->
+    case Integer.parse(generic) do
+      {integer, ""} ->
+        {:number, {:integer, integer}}
+
+      _ ->
         try do
-          String.to_integer(generic)
+          Float.parse(generic)
         rescue
           ArgumentError ->
-            case String.split(generic, "e") do
-              [base, exponent] ->
-                try do
-                  {String.to_integer(base), String.to_integer(exponent)}
-                rescue
-                  ArgumentError ->
-                    {:string, {:free, generic}}
-                else
-                  {base, exponent} ->
-                    try do
-                      String.to_float("#{base / 1}e#{exponent}")
-                    rescue
-                      ArgumentError ->
-                        {:string, {:free, generic}}
-                    else
-                      float -> {:number, {:float, float}}
-                    end
-                end
-
-              [generic] ->
-                {:string, {:free, generic}}
-            end
+            {:string, {:free, generic}}
         else
-          integer -> {:number, {:integer, integer}}
+          {float, ""} -> {:number, {:float, float}}
+          _ -> {:string, {:free, generic}}
         end
-    else
-      float -> {:number, {:float, float}}
     end
   end
 end
