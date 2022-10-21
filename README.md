@@ -9,7 +9,7 @@ The package can be installed by adding `jsonc` to your list of dependencies in `
 ```elixir
 def deps do
   [
-    {:jsonc, "~> 0.8.0"}
+    {:jsonc, "~> 0.9.0"}
   ]
 end
 ```
