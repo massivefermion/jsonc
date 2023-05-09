@@ -32,6 +32,16 @@ defmodule JSONC.Parser do
     "|"
   ]
 
+  def parse!(content) when is_binary(content) do
+    case parse(content) do
+      {:ok, result} ->
+        result
+
+      {:error, reason} ->
+        raise reason
+    end
+  end
+
   def parse(content) when is_binary(content) do
     case parse_value(content) do
       {result, ""} -> {:ok, %{type: :root, value: result}}
@@ -260,34 +270,34 @@ defmodule JSONC.Parser do
     end
   end
 
-  # defp parse_comments(<<peeked::utf8, peeked_rest::binary>> = content, comments \\ []) do
-  #   case <<peeked::utf8>> do
-  #     "/" ->
-  #       next(
-  #         {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
-  #         {:comment, :single, ""}
-  #       )
+  defp parse_comments(content, comments \\ []) do
+    case content do
+      <<"//", rest::binary>> ->
+        {comment, rest} = parse_comment(rest, :single)
+        parse_comments(rest, comments ++ [comment])
 
-  #     "*" ->
-  #       next(
-  #         {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
-  #         {:comment, :multi, ""}
-  #       )
+      <<"/*", rest::binary>> ->
+        {comment, rest} = parse_comment(rest, :multi)
+        parse_comments(rest, comments ++ [comment])
 
-  #     _ ->
-  #       {{:error, "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
-  #        {rest, cursor: {line, column}, token: nil}}
-  #   end
-  # end
+      _ ->
+        comments
+    end
+  end
 
-  # defp parse_comment(_, _ \\ "")
+  defp parse_comment(_, _ \\ "")
 
-  # defp parse_comment(<<current::utf8, "\n", rest::binary>>, :single, storage) do
-  #   {%{type: :comment, subtype: :single, value: "#{storage}#{<<current::utf8>>}"}, rest}
-  # end
+  defp parse_comment(<<"\n", rest::binary>>, :single, storage) do
+    {%{type: :comment, subtype: :single, value: storage}, rest}
+  end
 
-  # defp parse_comment() do
-  # end
+  defp parse_comment(<<"*/", rest::binary>>, :multi, storage) do
+    {%{type: :comment, subtype: :multi, value: storage}, rest}
+  end
+
+  defp parse_comment(<<current::utf8, rest::binary>>, subtype, storage) do
+    parse_comment(rest, subtype, "#{storage}#{<<current::utf8>>}")
+  end
 
   defp skip_whitespace("") do
     ""
