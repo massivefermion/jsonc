@@ -1,251 +1,338 @@
 defmodule JSONC.Parser do
-  @moduledoc false
+  @whitespace ["\v", "\f", "\r", "\n", "\s", "\t", "\b"]
 
-  import JSONC.Tokenizer
-
-  def parse!(content) when is_binary(content) do
-    case parse(content) do
-      {:ok, result} ->
-        result
-
-      {:error, reason} ->
-        raise reason
-    end
-  end
+  @invalid_for_generics [
+    "{",
+    "}",
+    "[",
+    "]",
+    ",",
+    ":",
+    "\\",
+    "/",
+    "\"",
+    "`",
+    "'",
+    "~",
+    "*",
+    "(",
+    ")",
+    "<",
+    ">",
+    "!",
+    "?",
+    "@",
+    "#",
+    "$",
+    "%",
+    "^",
+    "&",
+    "=",
+    ";",
+    "|"
+  ]
 
   def parse(content) when is_binary(content) do
-    parse_value({content, cursor: {1, 1}, token: nil}, :root)
+    case parse_value(content) do
+      {result, ""} -> {:ok, %{type: :root, value: result}}
+      :error -> {:error, ""}
+    end
   end
 
-  defp parse_value(state, context \\ :other) do
-    case parse_comments(state) do
-      {:error, reason} ->
-        {:error, reason}
+  defp parse_value(content) do
+    <<current::utf8, rest::binary>> = skip_whitespace(content)
 
-      {comments, state} when is_list(comments) ->
-        {current, state} = next(state)
+    case <<current::utf8>> do
+      "[" -> parse_array(rest)
+      "{" -> parse_object(rest)
+      "`" -> parse_string(rest, :multi)
+      "\"" -> parse_string(rest, :single)
+      _ -> parse_generic("#{<<current::utf8>>}#{rest}")
+    end
+  end
 
-        case parse_comments(state) do
-          {:error, reason} ->
-            {:error, reason}
+  defp parse_array(_, _ \\ [])
 
-          {new_comments, state} when is_list(new_comments) ->
-            comments = comments ++ new_comments
+  defp parse_array("", _) do
+    IO.puts("FLAG A")
+    :error
+  end
 
-            {value, state} =
-              case {current, state} do
-                {{{:delimiter, {:brace, :open}}, line, column}, state} ->
-                  {node, state} = parse_object(state, {line, column})
+  defp parse_array(content, list) do
+    <<current::utf8, rest::binary>> = skip_whitespace(content)
 
-                  case {node, state} do
-                    {:error, reason} ->
-                      {:error, reason}
+    cond do
+      <<current::utf8>> == "]" ->
+        rest = skip_whitespace(rest)
+        {%{type: :array, value: list}, rest}
 
-                    _ ->
-                      {{node, comments}, state}
-                  end
+      <<current::utf8>> == "," and list == [] ->
+        IO.puts("FLAG B")
+        :error
 
-                {{{:delimiter, {:bracket, :open}}, line, column}, state} ->
-                  {node, state} = parse_array(state, {line, column})
+      <<current::utf8>> in [" ", "\s", ","] ->
+        parse_array(rest, list)
 
-                  case {node, state} do
-                    {:error, reason} ->
-                      {:error, reason}
+      true ->
+        {value, rest} = parse_value(content)
+        parse_array(rest, list ++ [value])
+    end
+  end
 
-                    _ ->
-                      {{node, comments}, state}
-                  end
+  defp parse_object(_, _ \\ %{})
 
-                {{{:string, {subtype, value}}, line, column}, state} ->
-                  {{%{
-                      type: :string,
-                      subtype: subtype,
-                      value: value,
-                      place: {line, column}
-                    }, comments}, state}
+  defp parse_object("", _) do
+    IO.puts("FLAG C")
+    :error
+  end
 
-                {{{:number, {subtype, value}}, line, column}, state} ->
-                  {{%{
-                      type: :number,
-                      subtype: subtype,
-                      value: value,
-                      place: {line, column}
-                    }, comments}, state}
+  defp parse_object(content, map) do
+    <<current::utf8, rest::binary>> = skip_whitespace(content)
 
-                {{{:boolean, value}, line, column}, state} ->
-                  {{%{type: :boolean, value: value, place: {line, column}}, comments}, state}
+    cond do
+      <<current::utf8>> == "}" ->
+        rest = skip_whitespace(rest)
+        {%{type: :object, value: map}, rest}
 
-                {{nil, line, column}, state} ->
-                  {{%{type: nil, place: {line, column}}, comments}, state}
+      <<current::utf8>> == "," and map == %{} ->
+        IO.puts("FLAG D")
+        :error
 
-                {:error, reason} ->
-                  {:error, reason}
+      <<current::utf8>> in [" ", "\s", ","] ->
+        parse_object(rest, map)
 
-                {{token, line, column}, _} ->
-                  {:error,
-                   "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
+      true ->
+        case parse_kv(content) do
+          {{key, value}, rest} ->
+            parse_object(rest, map |> Map.put(key, value))
 
-                {:done, _} ->
-                  {:error, "unexpected end of input"}
-              end
-
-            case value do
-              :error ->
-                {:error, state}
-
-              {value, _} = node ->
-                case context do
-                  :root ->
-                    case peek(state) do
-                      :done ->
-                        {:ok, %{type: :root, value: value, comments: comments}}
-
-                      {token, line, column} ->
-                        {:error,
-                         "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-                    end
-
-                  _ ->
-                    {node, state}
-                end
-            end
+          _ ->
+            IO.puts("FLAG E")
+            :error
         end
     end
   end
 
-  defp parse_object(state, start, map \\ %{}, comments \\ [])
-       when is_map(map) and is_list(comments) do
-    case peek(state) do
-      {{:delimiter, {:brace, :close}}, _, _} ->
-        {_, state} = next(state)
+  defp parse_kv(content) do
+    content = skip_whitespace(content)
 
-        case parse_comments(state) do
-          {new_comments, state} when is_list(new_comments) ->
-            comments = comments ++ new_comments
-            {%{type: :object, value: map, place: start, comments: comments}, state}
+    case parse_key(content) do
+      {%{type: :string, subtype: _, value: key}, rest} ->
+        <<current::utf8, rest::binary>> = skip_whitespace(rest)
 
-          {:error, reason} ->
-            {:error, reason}
-        end
+        case <<current::utf8>> do
+          ":" ->
+            {value, rest} = parse_value(rest)
+            rest = skip_whitespace(rest)
+            {{key, value}, rest}
 
-      {{:delimiter, :comma} = token, line, column} when map == %{} ->
-        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-
-      {{:delimiter, :comma}, _, _} ->
-        {_, state} = next(state)
-
-        case parse_comments(state) do
-          {new_comments, state} when is_list(new_comments) ->
-            comments = comments ++ new_comments
-            parse_object(state, start, map, comments)
-
-          {:error, reason} ->
-            {:error, reason}
+          _ ->
+            IO.puts("FLAG F")
+            :error
         end
 
       _ ->
-        {current, state} = next(state)
-
-        case parse_comments(state) do
-          {new_comments, state} when is_list(new_comments) ->
-            comments = comments ++ new_comments
-
-            case current do
-              {{:string, {subtype, key}}, _, _} when subtype in [:single, :free] ->
-                case peek(state) do
-                  {{:delimiter, :colon}, _, _} ->
-                    {_, state} = next(state)
-
-                    case parse_comments(state) do
-                      {new_comments, state} when is_list(new_comments) ->
-                        comments = comments ++ new_comments
-
-                        case parse_value(state) do
-                          {:error, reason} ->
-                            {:error, reason}
-
-                          {{current, value_comments}, state} ->
-                            map = map |> Map.put(key, current)
-                            parse_object(state, start, map, comments ++ value_comments)
-                        end
-
-                      {:error, reason} ->
-                        {:error, reason}
-                    end
-
-                  {token, line, column} ->
-                    {:error,
-                     "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-                end
-
-              {token, line, column} ->
-                {:error,
-                 "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-            end
-
-          {:error, reason} ->
-            {:error, reason}
-        end
+        IO.puts("FLAG G")
+        :error
     end
   end
 
-  defp parse_array(state, start, list \\ [], comments \\ [])
-       when is_list(list) and is_list(comments) do
-    case peek(state) do
-      {{:delimiter, {:bracket, :close}}, _, _} ->
-        {_, state} = next(state)
+  defp parse_key(content) do
+    <<current::utf8, rest::binary>> = skip_whitespace(content)
 
-        case parse_comments(state) do
-          {:error, reason} ->
-            {:error, reason}
-
-          {new_comments, state} when is_list(new_comments) ->
-            {%{type: :array, value: list, place: start, comments: comments ++ new_comments},
-             state}
-        end
-
-      {{:delimiter, :comma} = token, line, column} when list == [] ->
-        {:error, "unexpected token `#{token |> inspect()}` at line #{line} column #{column}"}
-
-      {{:delimiter, :comma}, _, _} ->
-        {_, state} = next(state)
-
-        case parse_comments(state) do
-          {:error, reason} ->
-            {:error, reason}
-
-          {new_comments, state} when is_list(new_comments) ->
-            comments = comments ++ new_comments
-            parse_array(state, start, list, comments)
-        end
+    case <<current::utf8>> do
+      "\"" ->
+        parse_string(rest, :single)
 
       _ ->
-        case parse_value(state) do
-          {:error, reason} ->
-            {:error, reason}
-
-          {{current, value_comments}, state} ->
-            list = list ++ [current]
-            parse_array(state, start, list, comments ++ value_comments)
-        end
+        parse_generic(content)
     end
   end
 
-  defp parse_comments(state, comments \\ []) when is_list(comments) do
-    case peek(state) do
-      {{:comment, {subtype, value}}, line, column} ->
-        {_, state} = next(state)
+  defp parse_string(_, _, _ \\ "")
 
-        parse_comments(
-          state,
-          comments ++ [%{type: :comment, subtype: subtype, value: value, place: {line, column}}]
-        )
+  defp parse_string(<<"\\">>, _, _) do
+    IO.puts("FLAG H")
+    :error
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp parse_string(<<"\\", "\"", rest::binary>>, :multi, storage) do
+    parse_string(rest, :multi, "#{storage}\\\"")
+  end
+
+  defp parse_string(<<"\\", "\"", rest::binary>>, :single, storage) do
+    parse_string(rest, :single, "#{storage}\"")
+  end
+
+  defp parse_string(<<"`", rest::binary>>, :multi, storage) do
+    {%{type: :string, subtype: :multi, value: storage}, rest}
+  end
+
+  defp parse_string(<<"\"", rest::binary>>, :single, storage) do
+    {%{type: :string, subtype: :single, value: storage}, rest}
+  end
+
+  defp parse_string(<<"\\", escaped::utf8, rest::binary>>, subtype, storage) do
+    case <<escaped::utf8>> do
+      "n" ->
+        parse_string(rest, subtype, "#{storage}\n")
+
+      "b" ->
+        parse_string(rest, subtype, "#{storage}\b")
+
+      "f" ->
+        parse_string(rest, subtype, "#{storage}\f")
+
+      "t" ->
+        parse_string(rest, subtype, "#{storage}\t")
+
+      "r" ->
+        parse_string(rest, subtype, "#{storage}\r")
+
+      "\\" ->
+        parse_string(rest, subtype, "#{storage}\\")
+
+      "u" ->
+        parse_hex(rest, subtype, storage)
 
       _ ->
-        {comments, state}
+        :error
+    end
+  end
+
+  defp parse_string(<<32::utf8, rest::binary>>, :single, storage) do
+    parse_string(rest, :single, "#{storage} ")
+  end
+
+  defp parse_string(<<current::utf8, rest::binary>>, :single, _storage)
+       when <<current::utf8>> in @whitespace do
+    IO.puts("FLAG I")
+    :error
+  end
+
+  defp parse_string(<<current::utf8, rest::binary>>, subtype, storage) do
+    parse_string(rest, subtype, "#{storage}#{<<current::utf8>>}")
+  end
+
+  defp parse_generic(_, _ \\ "")
+
+  defp parse_generic(<<current::utf8>>, storage) do
+    {handle_generic("#{storage}#{<<current::utf8>>}"), ""}
+  end
+
+  defp parse_generic(<<current::utf8, _::binary>> = content, storage)
+       when <<current::utf8>> in [",", "}", "]", ":"] do
+    {handle_generic(storage), content}
+  end
+
+  defp parse_generic(<<current::utf8, rest::binary>>, storage)
+       when <<current::utf8>> in @whitespace do
+    {handle_generic(storage), rest}
+  end
+
+  defp parse_generic(<<current::utf8, _::binary>> = content, storage)
+       when <<current::utf8>> in @invalid_for_generics do
+    :error
+  end
+
+  defp parse_generic(<<current::utf8, rest::binary>>, storage) do
+    parse_generic(rest, "#{storage}#{<<current::utf8>>}")
+  end
+
+  defp parse_hex("", parent_type, storage) do
+    IO.puts("FLAG K")
+    :error
+  end
+
+  defp parse_hex(content, parent_type, storage) do
+    <<first::utf8, second::utf8, third::utf8, fourth::utf8, rest::binary>> = content
+
+    case Integer.parse(
+           "#{<<first::utf8>>}#{<<second::utf8>>}#{<<third::utf8>>}#{<<fourth::utf8>>}",
+           16
+         ) do
+      {code, ""} ->
+        parse_string(rest, parent_type, "#{storage}#{<<code::utf8>>}")
+
+      _ ->
+        IO.puts("FLAG L")
+        :error
+    end
+  end
+
+  # defp parse_comments(<<peeked::utf8, peeked_rest::binary>> = content, comments \\ []) do
+  #   case <<peeked::utf8>> do
+  #     "/" ->
+  #       next(
+  #         {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
+  #         {:comment, :single, ""}
+  #       )
+
+  #     "*" ->
+  #       next(
+  #         {peeked_rest, cursor: {line, column + 2}, token: {line, column}},
+  #         {:comment, :multi, ""}
+  #       )
+
+  #     _ ->
+  #       {{:error, "unexpected character `#{<<peeked::utf8>>}` at line #{line} column #{column}"},
+  #        {rest, cursor: {line, column}, token: nil}}
+  #   end
+  # end
+
+  # defp parse_comment(_, _ \\ "")
+
+  # defp parse_comment(<<current::utf8, "\n", rest::binary>>, :single, storage) do
+  #   {%{type: :comment, subtype: :single, value: "#{storage}#{<<current::utf8>>}"}, rest}
+  # end
+
+  # defp parse_comment() do
+  # end
+
+  defp skip_whitespace("") do
+    ""
+  end
+
+  defp skip_whitespace(<<current::utf8, rest::binary>> = content) do
+    cond do
+      <<current::utf8>> in @whitespace ->
+        skip_whitespace(rest)
+
+      true ->
+        content
+    end
+  end
+
+  defp handle_generic("true") do
+    %{type: :boolean, value: true}
+  end
+
+  defp handle_generic("false") do
+    %{type: :boolean, value: false}
+  end
+
+  defp handle_generic("null") do
+    %{type: nil}
+  end
+
+  defp handle_generic(generic) when is_binary(generic) do
+    case Integer.parse(generic) do
+      {integer, ""} ->
+        %{type: :number, subtype: :integer, value: integer}
+
+      _ ->
+        try do
+          Float.parse(generic)
+        rescue
+          ArgumentError ->
+            %{type: :string, subtype: :free, value: generic}
+        else
+          {float, ""} ->
+            %{type: :number, subtype: :float, value: float}
+
+          _ ->
+            %{type: :string, subtype: :free, value: generic}
+        end
     end
   end
 end
